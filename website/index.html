@@ -593,13 +593,13 @@
     <div class="section-head">
       <span class="eyebrow">Speed</span>
       <h2>Talk doesn't take time.</h2>
-      <p class="section-lead">Most people type 50 words per minute. Most people speak 200.</p>
+      <p class="section-lead">Most people type 47 words per minute. Most people speak 213.</p>
     </div>
     <div class="speed-grid">
       <div class="speed-card">
         <div class="speed-hero">
           <div class="speed-title">Keyboard</div>
-          <div class="speed-rate-big">50<span>WPM</span></div>
+          <div class="speed-rate-big">47<span>WPM</span></div>
         </div>
         <div class="speed-mock">
           <span id="kbd-typed"></span><span class="caret"></span>
@@ -608,7 +608,7 @@
       <div class="speed-card veet">
         <div class="speed-hero">
           <div class="speed-title">Veet</div>
-          <div class="speed-rate-big">200<span>WPM</span></div>
+          <div class="speed-rate-big">213<span>WPM</span></div>
         </div>
         <div class="speed-mock">
           <span id="veet-typed"></span><span class="caret"></span>
@@ -772,10 +772,13 @@
     const el = document.getElementById('spoken-text');
     el.innerHTML = '';
     SPOKEN_TOKENS.forEach((tok, i) => {
+      // Insert spaces as their own text nodes so the inline-block words
+      // don't visually collapse against each other.
+      if (i > 0) el.appendChild(document.createTextNode(' '));
       const tag = tok.f ? 's' : 'span';
       const node = document.createElement(tag);
       if (!tok.f) node.classList.add('w');
-      node.textContent = (i > 0 ? ' ' : '') + tok.t;
+      node.textContent = tok.t;
       el.appendChild(node);
       requestAnimationFrame(() => {
         setTimeout(() => node.classList.add('in'), 130 * i);
@@ -787,9 +790,10 @@
     el.innerHTML = '';
     const words = PASTED.split(' ');
     words.forEach((w, i) => {
+      if (i > 0) el.appendChild(document.createTextNode(' '));
       const span = document.createElement('span');
       span.classList.add('w');
-      span.textContent = (i > 0 ? ' ' : '') + w;
+      span.textContent = w;
       el.appendChild(span);
       setTimeout(() => span.classList.add('in'), 80 * i);
     });
@@ -804,7 +808,7 @@
   cyclePolish();
 
   // ── Speed comparison: 50 WPM vs 200 WPM ────────────────────
-  // Avg English word ≈ 5 chars. 50 WPM ≈ 240ms/char.  200 WPM ≈ 60ms/char.
+  // Avg English word ≈ 5 chars. 47 WPM ≈ 255ms/char.  213 WPM ≈ 56ms/char.
   const SPEED_TEXT =
     "Hi Sarah, can you forward the contract from yesterday's call to legal " +
     "by EOD? I'd like to lock the redlines before Friday's review. " +
@@ -823,8 +827,8 @@
     }
     step();
   }
-  runSpeedDemo('kbd-typed', 240);
-  runSpeedDemo('veet-typed', 60);
+  runSpeedDemo('kbd-typed', 255);
+  runSpeedDemo('veet-typed', 56);
 </script>
 </body>
 </html>

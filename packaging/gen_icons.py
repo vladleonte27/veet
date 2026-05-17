@@ -43,9 +43,10 @@ def make_icon(size: int, mark_transparent: Image.Image, glow: bool = False) -> I
     )
 
     if glow:
-        # Top-anchored cyan halo — reads as a light source above the icon.
+        # Top-right anchored cyan halo — reads as a light source from above
+        # the icon's upper-right corner.
         y, x = np.mgrid[0:size, 0:size].astype(np.float32)
-        gx = size * 0.50
+        gx = size * 0.74
         gy = size * 0.26
         dist = np.sqrt((x - gx) ** 2 + (y - gy) ** 2)
         norm = dist / (size * 0.55)
