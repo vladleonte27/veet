@@ -460,6 +460,9 @@ class Overlay:
         self.prev_state: str | None = None
         self.prev_start_t = 0.0                       # keeps old indicator's animation phase
         self.label_swap_t = 0.0
+        # Window fade state
+        self._fade_after_id: str | None = None
+        self.PEAK_ALPHA = 0.95
 
         root_.overrideredirect(True)
         root_.attributes("-topmost", True)
@@ -659,16 +662,66 @@ class Overlay:
                 fallback = Image.new("RGBA", (self.WINDOW_W, self.PILL_H), (0, 0, 0, 0))
                 self._orig = fallback
                 self._tinted = Image.new("RGBA", (self.WINDOW_W, self.PILL_H), (24, 26, 32, 230))
+            # Start invisible, then ease in for a smooth appearance.
+            try:
+                self.root.attributes("-alpha", 0.0)
+            except Exception:
+                pass
             self.root.deiconify()
+            self._fade_to(self.PEAK_ALPHA, duration_ms=220)
             self._tick()
+        else:
+            # Cancel any in-flight fade-out so a re-show feels continuous.
+            self._fade_to(self.PEAK_ALPHA, duration_ms=160)
 
     def show_recording(self) -> None: self._show("recording")
     def show_transcribing(self) -> None: self._show("transcribing")
     def show_loading(self) -> None: self._show("loading")
 
     def hide(self) -> None:
+        if self.state == "hidden":
+            return
+        self._fade_to(0.0, duration_ms=180, on_done=self._finish_hide)
+
+    def _finish_hide(self) -> None:
         self.state = "hidden"
-        self.root.withdraw()
+        try:
+            self.root.withdraw()
+        except Exception:
+            pass
+
+    def _fade_to(self, target: float, duration_ms: int = 200,
+                 on_done=None) -> None:
+        """Cubic-ease alpha animation. Cancels any in-flight fade so rapid
+        show/hide toggles cross-blend naturally."""
+        if self._fade_after_id:
+            try:
+                self.root.after_cancel(self._fade_after_id)
+            except Exception:
+                pass
+            self._fade_after_id = None
+        try:
+            start = float(self.root.attributes("-alpha"))
+        except Exception:
+            start = 1.0
+        steps = max(1, duration_ms // 16)
+
+        def step(i: int) -> None:
+            t = i / steps
+            eased = 1 - (1 - t) ** 3                    # ease-out cubic
+            alpha = start + (target - start) * eased
+            try:
+                self.root.attributes("-alpha", max(0.0, min(1.0, alpha)))
+            except Exception:
+                pass
+            if i >= steps:
+                self._fade_after_id = None
+                if on_done:
+                    on_done()
+                return
+            self._fade_after_id = self.root.after(16, lambda: step(i + 1))
+
+        step(1)
 
     def _draw_indicator(
         self,
@@ -881,66 +934,147 @@ _activation_open = False
 
 
 def show_activation_modal() -> None:
-    """Modal asking for purchase email; validates via /api/validate."""
+    """Branded activation modal — frameless, rounded, fades in. Asks for the
+    purchase email and validates via /api/validate."""
     global _activation_open
     if _activation_open:
         return
     _activation_open = True
 
+    SURFACE   = "#0F1115"
+    SURFACE_2 = "#171A22"
+    SURFACE_3 = "#1F2330"
+    HAIRLINE  = "#2A2F3D"
+    TEXT      = "#F5F5F8"
+    TEXT_2    = "#9AA0A6"
+    TEXT_3    = "#6E7480"
+    ACCENT    = "#67E8F9"
+    ACCENT_HI = "#A5F3FC"
+    ERROR     = "#FF8B8B"
+
+    W, H = 460, 460
+
     win = tk.Toplevel(root)
     win.title("Activate Veet")
-    win.configure(bg="#0F1115")
-    win.resizable(False, False)
+    win.configure(bg=SURFACE)
+    win.overrideredirect(True)
     win.attributes("-topmost", True)
+    win.attributes("-alpha", 0.0)         # fade in
 
-    w, h = 420, 320
     sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-    win.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
+    win.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2 - 40}")
 
-    frame = tk.Frame(win, bg="#0F1115", padx=32, pady=28)
-    frame.pack(fill="both", expand=True)
+    # Rounded window corners + drop shadow via DWM
+    win.update_idletasks()
+    try:
+        hwnd = ctypes.windll.user32.GetAncestor(win.winfo_id(), 2)
+        rgn = ctypes.windll.gdi32.CreateRoundRectRgn(0, 0, W + 1, H + 1, 32, 32)
+        ctypes.windll.user32.SetWindowRgn(hwnd, rgn, True)
+    except Exception:
+        pass
 
-    tk.Label(frame, text="Activate Veet", bg="#0F1115", fg="#F5F5F8",
-             font=("Segoe UI", 20, "bold")).pack(anchor="w")
-    tk.Label(frame, text="Enter the email you used at checkout.",
-             bg="#0F1115", fg="#9AA0A6",
-             font=("Segoe UI", 10)).pack(anchor="w", pady=(2, 18))
+    body = tk.Frame(win, bg=SURFACE, padx=36, pady=32)
+    body.pack(fill="both", expand=True)
 
-    email_var = tk.StringVar(value=licensing.cached_email() or "")
-    entry = tk.Entry(frame, textvariable=email_var, font=("Segoe UI", 11),
-                     bg="#1A1D26", fg="#F5F5F8", insertbackground="#67E8F9",
-                     relief="flat", bd=0)
-    entry.pack(fill="x", ipady=10, ipadx=12)
-    entry.focus_set()
+    # Top row: logo + close
+    top = tk.Frame(body, bg=SURFACE)
+    top.pack(fill="x")
 
-    status_var = tk.StringVar(value="")
-    status_label = tk.Label(frame, textvariable=status_var, bg="#0F1115",
-                            fg="#9AA0A6", font=("Segoe UI", 10),
-                            anchor="w", justify="left", wraplength=360)
-    status_label.pack(anchor="w", pady=(10, 0))
+    try:
+        ico_path = resource_path("assets", "icon.png")
+        if ico_path.is_file():
+            ico_img = Image.open(str(ico_path)).convert("RGBA").resize((44, 44), Image.LANCZOS)
+            ico_photo = ImageTk.PhotoImage(ico_img)
+            ico_label = tk.Label(top, image=ico_photo, bg=SURFACE, bd=0)
+            ico_label.image = ico_photo   # prevent GC
+            ico_label.pack(side="left")
+    except Exception:
+        pass
 
     def _close():
         global _activation_open
         _activation_open = False
-        try:
-            win.destroy()
-        except Exception:
-            pass
+        # Fade out before destroying
+        def fade(step):
+            if step < 0:
+                try: win.destroy()
+                except Exception: pass
+                return
+            try: win.attributes("-alpha", step / 8.0)
+            except Exception: pass
+            win.after(16, lambda: fade(step - 1))
+        fade(8)
 
-    btn_row = tk.Frame(frame, bg="#0F1115")
-    btn_row.pack(fill="x", pady=(22, 0))
+    close_btn = tk.Label(top, text="✕", bg=SURFACE, fg=TEXT_3,
+                        font=("Segoe UI", 14), cursor="hand2")
+    close_btn.pack(side="right")
+    close_btn.bind("<Enter>", lambda _: close_btn.config(fg=TEXT))
+    close_btn.bind("<Leave>", lambda _: close_btn.config(fg=TEXT_3))
+    close_btn.bind("<Button-1>", lambda _: _close())
 
-    btn_activate = tk.Button(
-        btn_row, text="Activate",
-        bg="#67E8F9", fg="#0A0D12", activebackground="#A5F3FC",
-        relief="flat", bd=0, padx=22, pady=10,
-        font=("Segoe UI", 11, "bold"), cursor="hand2",
-    )
+    # Title + subtitle
+    tk.Label(body, text="Activate Veet", bg=SURFACE, fg=TEXT,
+             font=("Segoe UI Semibold", 26)).pack(anchor="w", pady=(24, 4))
+    tk.Label(body, text="Enter the email you used at checkout.",
+             bg=SURFACE, fg=TEXT_2,
+             font=("Segoe UI", 11)).pack(anchor="w", pady=(0, 22))
+
+    # Input — wrapped in a rounded frame to look like a website input
+    input_wrap = tk.Frame(body, bg=SURFACE_2, highlightthickness=1,
+                          highlightbackground=HAIRLINE,
+                          highlightcolor=ACCENT)
+    input_wrap.pack(fill="x", ipady=2)
+
+    email_var = tk.StringVar(value=licensing.cached_email() or "")
+    entry = tk.Entry(input_wrap, textvariable=email_var,
+                     font=("Segoe UI", 12),
+                     bg=SURFACE_2, fg=TEXT,
+                     insertbackground=ACCENT,
+                     relief="flat", bd=0)
+    entry.pack(fill="x", padx=14, ipady=12)
+    entry.focus_set()
+
+    def on_focus_in(_):  input_wrap.config(highlightbackground=ACCENT)
+    def on_focus_out(_): input_wrap.config(highlightbackground=HAIRLINE)
+    entry.bind("<FocusIn>", on_focus_in)
+    entry.bind("<FocusOut>", on_focus_out)
+
+    # Status / error line
+    status_var = tk.StringVar(value="")
+    status_label = tk.Label(body, textvariable=status_var,
+                            bg=SURFACE, fg=TEXT_2,
+                            font=("Segoe UI", 10),
+                            anchor="w", justify="left", wraplength=W - 72)
+    status_label.pack(anchor="w", pady=(12, 0), fill="x")
+
+    # Buttons row
+    btn_row = tk.Frame(body, bg=SURFACE)
+    btn_row.pack(fill="x", pady=(28, 0))
+
+    def make_pill(parent, text, bg, fg, hover_bg, cmd, primary=False):
+        btn = tk.Button(parent, text=text, command=cmd,
+                        bg=bg, fg=fg, activebackground=hover_bg,
+                        activeforeground=fg, relief="flat", bd=0,
+                        font=("Segoe UI Semibold" if primary else "Segoe UI", 11),
+                        cursor="hand2", padx=24, pady=12)
+        btn.bind("<Enter>", lambda _: btn.config(bg=hover_bg))
+        btn.bind("<Leave>", lambda _: btn.config(bg=bg))
+        return btn
+
+    btn_buy = make_pill(btn_row, "Buy Veet",
+                        bg=SURFACE_3, fg=TEXT, hover_bg="#28304A",
+                        cmd=lambda: webbrowser.open("https://veet.space/#pricing"))
+    btn_buy.pack(side="right", padx=(0, 0))
+
+    btn_activate = make_pill(btn_row, "Activate",
+                             bg=ACCENT, fg="#0A0D12", hover_bg=ACCENT_HI,
+                             cmd=None, primary=True)
+    btn_activate.pack(side="right", padx=(0, 10))
 
     def do_activate():
         status_var.set("Checking…")
-        status_label.config(fg="#9AA0A6")
-        btn_activate.config(state="disabled")
+        status_label.config(fg=TEXT_2)
+        btn_activate.config(state="disabled", text="Checking…")
         win.update_idletasks()
 
         def _worker():
@@ -948,7 +1082,7 @@ def show_activation_modal() -> None:
             app.post_ui(lambda: _done(res))
 
         def _done(res):
-            btn_activate.config(state="normal")
+            btn_activate.config(state="normal", text="Activate")
             if res.get("active"):
                 app.license_active = True
                 app.license_tier = res.get("tier", "")
@@ -965,28 +1099,39 @@ def show_activation_modal() -> None:
                     "server_misconfigured": "License server is temporarily unavailable. Try again in a few minutes.",
                 }.get(reason, f"Activation failed ({reason}).")
                 status_var.set(msg)
-                status_label.config(fg="#ff8080")
+                status_label.config(fg=ERROR)
 
         threading.Thread(target=_worker, daemon=True).start()
 
     btn_activate.config(command=do_activate)
-    btn_activate.pack(side="right")
     entry.bind("<Return>", lambda _: do_activate())
+    win.bind("<Escape>", lambda _: _close())
 
-    btn_buy = tk.Button(
-        btn_row, text="Buy Veet",
-        command=lambda: webbrowser.open("https://veet.space/#pricing"),
-        bg="#1A1D26", fg="#F5F5F8", activebackground="#252938",
-        relief="flat", bd=0, padx=18, pady=10,
-        font=("Segoe UI", 11), cursor="hand2",
-    )
-    btn_buy.pack(side="right", padx=(0, 10))
+    # Footnote
+    tk.Label(body,
+             text="No license yet? Click \"Buy Veet\" — you'll get a confirmation\n"
+                  "email. Use that same email here to activate.",
+             bg=SURFACE, fg=TEXT_3,
+             font=("Segoe UI", 9), justify="left").pack(anchor="w", pady=(28, 0))
 
-    tk.Label(frame,
-             text="No license? Buy at veet.space and we'll send a confirmation\n"
-                  "email — use that same email here to activate.",
-             bg="#0F1115", fg="#6E7480",
-             font=("Segoe UI", 9), justify="left").pack(anchor="w", pady=(18, 0))
+    # Draggable from anywhere on the modal (since there's no titlebar)
+    def _on_drag_start(e):
+        win._drag_x = e.x_root - win.winfo_x()
+        win._drag_y = e.y_root - win.winfo_y()
+    def _on_drag(e):
+        win.geometry(f"+{e.x_root - win._drag_x}+{e.y_root - win._drag_y}")
+    for w in (win, body, top):
+        w.bind("<Button-1>", _on_drag_start)
+        w.bind("<B1-Motion>", _on_drag)
+
+    # Fade in
+    def _fade_in(step):
+        if step > 12:
+            return
+        try: win.attributes("-alpha", min(1.0, step / 12 * 0.98))
+        except Exception: pass
+        win.after(15, lambda: _fade_in(step + 1))
+    _fade_in(1)
 
     win.protocol("WM_DELETE_WINDOW", _close)
 

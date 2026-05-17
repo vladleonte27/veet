@@ -8,7 +8,7 @@
 #endif
 
 #define MyAppName      "Veet"
-#define MyAppVersion   "0.1.0"
+#define MyAppVersion   "0.2.1"
 #define MyAppPublisher "VL Media"
 #define MyAppURL       "https://veet.app"
 #define MyAppExeName   "Veet.exe"
@@ -34,6 +34,7 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\assets\icon.ico
 MinVersion=10.0
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

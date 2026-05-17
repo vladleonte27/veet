@@ -146,6 +146,38 @@
     display: flex; gap: 8px; align-items: center; justify-content: center;
   }
   .dot-sep { width: 2.5px; height: 2.5px; border-radius: 50%; background: var(--text-3); }
+  .cta-meta-link {
+    color: var(--accent); text-decoration: none;
+    transition: color 150ms;
+  }
+  .cta-meta-link:hover { color: var(--accent-2); }
+  .install-help {
+    max-width: 540px; margin: 16px auto 0;
+    font-size: 12px; color: var(--text-3);
+    text-align: center;
+  }
+  .install-help summary {
+    cursor: pointer; list-style: none;
+    padding: 6px 12px; display: inline-block;
+    border-radius: 999px;
+    transition: color 150ms, background 150ms;
+  }
+  .install-help summary::-webkit-details-marker { display: none; }
+  .install-help summary span {
+    color: var(--text-2); margin-left: 4px;
+    border-bottom: 1px solid var(--hairline-2);
+  }
+  .install-help summary:hover span { color: var(--text); border-color: var(--text-2); }
+  .install-help[open] summary { color: var(--text-2); }
+  .install-help p {
+    margin-top: 10px; line-height: 1.55;
+    color: var(--text-2); font-size: 12.5px;
+    max-width: 460px; margin-left: auto; margin-right: auto;
+    text-align: left;
+  }
+  .install-help p strong { color: var(--text); }
+  .install-help p a { color: var(--accent); text-decoration: none; }
+  .install-help p a:hover { text-decoration: underline; }
 
   /* ── Demo window (under hero) ─────────────────────────────── */
   .hero-demo {
@@ -542,10 +574,16 @@
       </a>
     </div>
     <div class="cta-meta">
-      <span>v0.1.0</span><span class="dot-sep"></span>
+      <span>v0.2.1</span><span class="dot-sep"></span>
       <span>Win 10 / 11</span><span class="dot-sep"></span>
-      <span>70 MB</span>
+      <span>70 MB</span><span class="dot-sep"></span>
+      <a href="https://github.com/vladleonte27/veet/releases/latest/download/Veet-Setup-GPU.exe"
+         class="cta-meta-link" download>Got NVIDIA? Get the GPU build (~1 GB) →</a>
     </div>
+    <details class="install-help">
+      <summary>Windows shows "Unknown publisher"? <span>Read this</span></summary>
+      <p>On first launch Windows may say <em>"Windows protected your PC"</em> — this is normal for new apps that aren't yet code-signed. Click <strong>More info</strong>, then <strong>Run anyway</strong>. The .exe is built from open source at <a href="https://github.com/vladleonte27/veet" target="_blank" rel="noopener">github.com/vladleonte27/veet</a>. We're getting an EV cert soon to remove the warning entirely.</p>
+    </details>
 
     <div class="hero-demo">
       <div class="mock-window">
