@@ -43,15 +43,15 @@ def make_icon(size: int, mark_transparent: Image.Image, glow: bool = False) -> I
     )
 
     if glow:
-        # Top-right anchored cyan halo — reads as a light source from above
-        # the icon's upper-right corner.
+        # Cyan halo tucked into the top-right corner. Steeper falloff and
+        # lower max alpha so it reads as a subtle accent, not a wash.
         y, x = np.mgrid[0:size, 0:size].astype(np.float32)
-        gx = size * 0.74
-        gy = size * 0.26
+        gx = size * 0.84
+        gy = size * 0.16
         dist = np.sqrt((x - gx) ** 2 + (y - gy) ** 2)
-        norm = dist / (size * 0.55)
-        intensity = np.clip(1.0 - norm, 0.0, 1.0) ** 1.4
-        alpha_arr = (intensity * 130).astype(np.uint8)
+        norm = dist / (size * 0.50)
+        intensity = np.clip(1.0 - norm, 0.0, 1.0) ** 1.8
+        alpha_arr = (intensity * 85).astype(np.uint8)
         rgba = np.stack([
             np.full_like(alpha_arr, ACCENT[0]),
             np.full_like(alpha_arr, ACCENT[1]),
