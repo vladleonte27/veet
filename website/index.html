@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Veet — Voice typing, locally.</title>
+<meta name="description" content="Hold Alt+Shift. Speak. Release. Your words appear. Local Whisper, no cloud, no API key." />
+<link rel="icon" type="image/png" href="assets/icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --surface:    #0B0D12;
+    --surface-2:  #161821;
+    --hairline:   rgba(255,255,255,0.08);
+    --hairline-2: rgba(255,255,255,0.14);
+    --text:       #F5F5F8;
+    --text-2:     #9AA0A6;
+    --text-3:     #6E7480;
+    --accent:     #67E8F9;
+    --accent-2:   #A5F3FC;
+    --glass-bg:   rgba(22, 24, 32, 0.45);
+    --glass-hi:   rgba(255,255,255,0.06);
+    --glow:       0 0 60px rgba(103, 232, 249, 0.20);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+
+  /* ── Ambient glass blobs (decorative) ─────────────────────── */
+  .blob {
+    position: fixed; z-index: -1;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.6;
+    pointer-events: none;
+  }
+  .blob.a { width: 540px; height: 540px; top: -180px; left: -120px;
+            background: radial-gradient(circle, rgba(103,232,249,0.16), transparent 70%); }
+  .blob.b { width: 580px; height: 580px; bottom: -200px; right: -160px;
+            background: radial-gradient(circle, rgba(103,232,249,0.10), transparent 70%); }
+
+  /* ── Layout ───────────────────────────────────────────────── */
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 56px 0; }
+
+  /* ── Nav ──────────────────────────────────────────────────── */
+  nav {
+    position: sticky; top: 12px; z-index: 10;
+    margin: 0 auto;
+    max-width: calc(1120px - 24px);
+  }
+  nav .wrap {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px; padding: 0 20px;
+    background: rgba(15, 17, 21, 0.55);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700; letter-spacing: -0.01em; font-size: 16px;
+  }
+  .logo-mark { width: 24px; height: 24px; }
+  .nav-links { display: flex; align-items: center; gap: 4px; }
+  .nav-link {
+    padding: 8px 14px; font-size: 14px; font-weight: 500; color: var(--text);
+    border-radius: 999px; transition: color 150ms, background 150ms;
+  }
+  .nav-link:hover { background: rgba(255,255,255,0.06); }
+
+  /* ── Buttons ──────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #0a0d12;
+    font-weight: 600; font-size: 14px;
+    border: none; cursor: pointer;
+    transition: transform 120ms ease, box-shadow 200ms ease, filter 120ms ease;
+    box-shadow: var(--glow);
+    text-decoration: none;
+  }
+  .btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
+  .btn-ghost {
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    border: 1px solid var(--hairline-2);
+    box-shadow: none;
+    backdrop-filter: blur(12px);
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,0.10); transform: translateY(-1px); }
+  .btn-lg { padding: 14px 22px; font-size: 15.5px; gap: 10px; }
+  .btn svg { width: 17px; height: 17px; flex-shrink: 0; }
+  .btn-lg svg { width: 19px; height: 19px; }
+  .btn-tag {
+    margin-left: 4px; padding: 2px 7px;
+    background: rgba(0,0,0,0.18); color: rgba(0,0,0,0.65);
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+    border-radius: 999px; text-transform: uppercase;
+  }
+  .btn-ghost .btn-tag { background: rgba(255,255,255,0.08); color: var(--text-2); }
+
+  /* ── Hero ─────────────────────────────────────────────────── */
+  .hero { text-align: center; padding: 88px 0 56px; }
+  .hero-mark {
+    width: 108px; height: 108px;
+    margin: 0 auto 32px;
+    display: block;
+    border-radius: 22%;
+  }
+  h1 {
+    font-size: clamp(40px, 6vw, 68px);
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 1.04;
+    margin-bottom: 20px;
+  }
+  .hero p.lead {
+    font-size: clamp(16px, 1.5vw, 19px);
+    color: var(--text-2);
+    max-width: 540px;
+    margin: 0 auto 36px;
+  }
+  .cta-row {
+    display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+  }
+  .cta-meta {
+    margin-top: 16px;
+    font-size: 11.5px; color: var(--text-3);
+    display: flex; gap: 8px; align-items: center; justify-content: center;
+  }
+  .dot-sep { width: 2.5px; height: 2.5px; border-radius: 50%; background: var(--text-3); }
+
+  /* ── Demo window (under hero) ─────────────────────────────── */
+  .hero-demo {
+    margin: 72px auto 0;
+    max-width: 640px;
+    position: relative;
+  }
+  .mock-window {
+    background: var(--glass-bg);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid var(--hairline);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow:
+      0 24px 80px rgba(0,0,0,0.4),
+      0 0 0 1px var(--glass-hi) inset;
+    text-align: left;
+  }
+  .mock-titlebar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--hairline);
+    background: rgba(255,255,255,0.02);
+  }
+  .traffic { width: 11px; height: 11px; border-radius: 50%; }
+  .traffic.r { background: #ff5f57; }
+  .traffic.y { background: #febc2e; }
+  .traffic.g { background: #28c840; }
+  .mock-title { margin-left: 12px; font-size: 12px; color: var(--text-3); }
+  .mock-content {
+    padding: 26px 28px 80px;
+    min-height: 200px;
+    font-size: 15px; color: var(--text);
+    line-height: 1.6;
+  }
+  .mock-label { color: var(--text-3); font-size: 12px; margin-bottom: 12px; letter-spacing: 0.04em; }
+  .typed { display: inline; }
+  .caret {
+    display: inline-block; width: 1.5px; height: 18px;
+    background: var(--accent);
+    vertical-align: text-bottom; margin-left: 1px;
+    animation: blink 1s steps(2, end) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Floating pill anchored to the mock window */
+  .pill {
+    position: absolute;
+    left: 50%; bottom: 16px; transform: translateX(-50%);
+    display: inline-flex; align-items: center; gap: 10px;
+    background: rgba(18, 20, 26, 0.78);
+    border: 1px solid var(--hairline-2);
+    padding: 9px 16px;
+    border-radius: 999px;
+    backdrop-filter: blur(20px);
+    font-size: 13px; color: var(--text); font-weight: 500;
+    box-shadow:
+      0 8px 32px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .pill-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #fff;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.6); transform: scale(1); }
+    50%      { box-shadow: 0 0 0 6px rgba(255,255,255,0); transform: scale(1.15); }
+  }
+
+  /* ── Section heads ────────────────────────────────────────── */
+  .eyebrow {
+    display: inline-block;
+    color: var(--accent);
+    font-size: 12px; font-weight: 600;
+    letter-spacing: 0.10em; text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  h2 {
+    font-size: clamp(26px, 3.4vw, 38px);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    margin-bottom: 14px;
+  }
+  .section-lead {
+    color: var(--text-2);
+    max-width: 540px;
+    font-size: 16px;
+  }
+  .section-head { text-align: center; margin-bottom: 40px; }
+  .section-head .section-lead { margin: 0 auto; }
+
+  /* ── Features grid (glassy) ───────────────────────────────── */
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid var(--hairline);
+    border-radius: 16px;
+    padding: 26px;
+    transition: transform 200ms ease, border-color 200ms ease, background 200ms ease;
+    box-shadow: inset 0 1px 0 var(--glass-hi);
+  }
+  .card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(103,232,249,0.20);
+  }
+  .card h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+  .card p  { color: var(--text-2); font-size: 14px; }
+
+  /* ── Pricing (single detected card) ───────────────────────── */
+  .price-wrap { display: flex; justify-content: center; }
+  .price-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid rgba(103,232,249,0.30);
+    border-radius: 22px;
+    padding: 40px 36px;
+    width: 100%; max-width: 440px;
+    text-align: center;
+    box-shadow:
+      0 24px 80px rgba(0,0,0,0.4),
+      inset 0 1px 0 var(--glass-hi),
+      0 0 80px rgba(103,232,249,0.08);
+  }
+  .price-region {
+    color: var(--text-2);
+    font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+  .price-amount {
+    font-size: 64px; font-weight: 800; letter-spacing: -0.035em;
+    line-height: 1; margin-bottom: 6px;
+  }
+  .price-suffix { color: var(--text-2); font-size: 18px; font-weight: 500; }
+  .price-list {
+    list-style: none; margin: 28px 0;
+    color: var(--text-2); font-size: 14px;
+    text-align: left;
+  }
+  .price-list li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 5px 0;
+  }
+  .check { color: var(--accent); flex-shrink: 0; }
+
+  /* ── Cleanup demo (raw → pasted) ──────────────────────────── */
+  .polish-grid {
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 18px;
+    max-width: 920px; margin: 0 auto; align-items: stretch;
+  }
+  .polish-col {
+    background: var(--glass-bg);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid var(--hairline);
+    border-radius: 16px; padding: 22px 24px;
+    display: flex; flex-direction: column; min-height: 200px;
+  }
+  .polish-col.clean { border-color: rgba(103,232,249,0.30); }
+  .polish-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-2);
+    margin-bottom: 14px;
+  }
+  .polish-tag.tag-clean { color: var(--accent); }
+  .polish-tag::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: currentColor;
+  }
+  .polish-text { font-size: 15px; line-height: 1.55; color: var(--text); }
+  .polish-text s {
+    color: rgba(255,140,140,0.65);
+    text-decoration-thickness: 1.5px;
+  }
+  .polish-text .w, .polish-text s {
+    opacity: 0;
+    transform: translateY(4px);
+    display: inline-block;
+    transition: opacity 360ms ease-out, transform 360ms ease-out;
+  }
+  .polish-text .w.in, .polish-text s.in {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .polish-arrow {
+    align-self: center;
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 1px solid var(--hairline-2);
+    background: rgba(255,255,255,0.04);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent);
+    font-size: 16px;
+  }
+  @media (max-width: 760px) {
+    .polish-grid { grid-template-columns: 1fr; }
+    .polish-arrow { transform: rotate(90deg); margin: 4px auto; }
+  }
+
+  /* ── Speed comparison (50 vs 200 WPM) ─────────────────────── */
+  .speed-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+    max-width: 1040px; margin: 0 auto;
+  }
+  .speed-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid var(--hairline);
+    border-radius: 18px; padding: 36px 28px 28px; overflow: hidden;
+    text-align: center;
+  }
+  .speed-card.veet { border-color: rgba(103,232,249,0.30); }
+  .speed-hero { margin-bottom: 28px; }
+  .speed-title {
+    font-size: clamp(28px, 3.6vw, 40px);
+    font-weight: 700; letter-spacing: -0.025em;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .speed-card.veet .speed-title { color: var(--accent); }
+  .speed-rate-big {
+    font-size: clamp(44px, 6vw, 64px);
+    font-weight: 800; letter-spacing: -0.035em;
+    color: var(--text); line-height: 1;
+  }
+  .speed-rate-big span {
+    font-size: 0.4em; font-weight: 600;
+    color: var(--text-3); margin-left: 6px;
+    letter-spacing: 0.04em;
+  }
+  .speed-card.veet .speed-rate-big { color: var(--text); }
+  .speed-mock {
+    background: rgba(11,13,18,0.55); border: 1px solid var(--hairline);
+    border-radius: 12px; padding: 18px;
+    font-size: 14px; line-height: 1.55; color: var(--text);
+    min-height: 170px;
+    text-align: left;
+  }
+  .speed-mock .caret {
+    display: inline-block; width: 1.5px; height: 15px;
+    background: var(--accent); vertical-align: text-bottom; margin-left: 1px;
+    animation: blink 1s steps(2, end) infinite;
+  }
+  .speed-card:not(.veet) .speed-mock .caret { background: var(--text-2); }
+  @media (max-width: 760px) {
+    .speed-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ── FAQ ──────────────────────────────────────────────────── */
+  .faq-list {
+    max-width: 720px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .faq-item {
+    background: var(--glass-bg);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid var(--hairline);
+    border-radius: 14px;
+    padding: 18px 22px;
+    cursor: pointer;
+    transition: border-color 200ms;
+  }
+  .faq-item[open] { border-color: rgba(103,232,249,0.30); }
+  .faq-item summary {
+    font-size: 15.5px; font-weight: 600; color: var(--text);
+    list-style: none; display: flex; justify-content: space-between; align-items: center;
+    gap: 16px;
+  }
+  .faq-item summary::-webkit-details-marker { display: none; }
+  .faq-item summary::after {
+    content: "+"; font-weight: 400; font-size: 22px; color: var(--text-2);
+    line-height: 1; transition: transform 200ms;
+  }
+  .faq-item[open] summary::after { transform: rotate(45deg); }
+  .faq-item p {
+    margin-top: 12px;
+    color: var(--text-2); font-size: 14.5px;
+  }
+
+  /* ── Footer ───────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--hairline);
+    padding: 32px 0;
+    color: var(--text-3);
+    font-size: 13px;
+    margin-top: 24px;
+  }
+  footer .wrap {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px;
+  }
+  footer a:hover { color: var(--text); }
+  .foot-links { display: flex; gap: 20px; }
+
+  /* ── Toast (for iOS waitlist) ─────────────────────────────── */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120%);
+    background: rgba(20, 22, 30, 0.92);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--hairline-2);
+    color: var(--text);
+    padding: 12px 18px;
+    border-radius: 999px;
+    font-size: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    transition: transform 280ms cubic-bezier(.2,.9,.3,1.1);
+    z-index: 100;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── Responsive ───────────────────────────────────────────── */
+  @media (max-width: 760px) {
+    section { padding: 48px 0; }
+    .hero { padding: 64px 0 40px; }
+    .grid-3 { grid-template-columns: 1fr; }
+    .nav-links { display: none; }
+    .mock-content { padding: 22px 22px 70px; font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="blob a"></div>
+<div class="blob b"></div>
+
+<nav>
+  <div class="wrap">
+    <a href="#" class="logo">
+      <img src="assets/icon-mark.png" alt="Veet" class="logo-mark" />
+      Veet
+    </a>
+    <div class="nav-links">
+      <a href="#features" class="nav-link">Features</a>
+      <a href="#pricing" class="nav-link">Pricing</a>
+      <a href="#faq" class="nav-link">FAQ</a>
+      <a href="https://github.com/vladleonte27/veet/releases/latest/download/Veet-Setup.exe" class="btn" download>
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="9.4" height="9.4" rx="0.6"/><rect x="12.6" y="2" width="9.4" height="9.4" rx="0.6"/><rect x="2" y="12.6" width="9.4" height="9.4" rx="0.6"/><rect x="12.6" y="12.6" width="9.4" height="9.4" rx="0.6"/></svg>
+        Windows
+      </a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <img src="assets/icon.png" alt="Veet" class="hero-mark" />
+    <h1>Voice typing, locally.</h1>
+    <p class="lead">Hold Alt+Shift anywhere on your computer. Speak. Release. Your words appear in whatever app you were just using.</p>
+    <div class="cta-row">
+      <a href="https://github.com/vladleonte27/veet/releases/latest/download/Veet-Setup.exe" class="btn btn-lg" download>
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="9.4" height="9.4" rx="0.6"/><rect x="12.6" y="2" width="9.4" height="9.4" rx="0.6"/><rect x="2" y="12.6" width="9.4" height="9.4" rx="0.6"/><rect x="12.6" y="12.6" width="9.4" height="9.4" rx="0.6"/></svg>
+        Windows
+      </a>
+      <a href="#" class="btn btn-lg btn-ghost" id="ios-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 12.5c0-2.7 2.2-4 2.3-4-1.3-1.8-3.3-2.1-4-2.1-1.7-.2-3.3 1-4.2 1-.9 0-2.2-.9-3.6-.9-1.9 0-3.6 1.1-4.5 2.8-2 3.4-.5 8.5 1.4 11.3.9 1.4 2 2.9 3.4 2.8 1.4-.1 1.9-.9 3.5-.9 1.6 0 2.1.9 3.5.9 1.5 0 2.4-1.4 3.3-2.7 1-1.6 1.5-3.1 1.5-3.2-.1 0-2.9-1.1-2.9-4.5zM14.7 4.4c.8-.9 1.3-2.2 1.1-3.5-1.1.1-2.4.7-3.2 1.6-.7.8-1.3 2.1-1.1 3.4 1.2.1 2.4-.6 3.2-1.5z"/></svg>
+        iOS
+        <span class="btn-tag">Soon</span>
+      </a>
+    </div>
+    <div class="cta-meta">
+      <span>v0.1.0</span><span class="dot-sep"></span>
+      <span>Win 10 / 11</span><span class="dot-sep"></span>
+      <span>70 MB</span>
+    </div>
+
+    <div class="hero-demo">
+      <div class="mock-window">
+        <div class="mock-titlebar">
+          <span class="traffic r"></span>
+          <span class="traffic y"></span>
+          <span class="traffic g"></span>
+          <span class="mock-title">Compose — Mail</span>
+        </div>
+        <div class="mock-content">
+          <div class="mock-label">To: mark@hendersonco.com</div>
+          <div><span class="typed" id="typed"></span><span class="caret"></span></div>
+        </div>
+        <div class="pill">
+          <span class="pill-dot"></span>
+          <span>Listening</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Why Veet</span>
+      <h2>Built for speed and privacy.</h2>
+      <p class="section-lead">Whisper-grade transcription that never leaves your machine.</p>
+    </div>
+    <div class="grid-3">
+      <div class="card">
+        <h3>Runs locally</h3>
+        <p>Your voice and your text never touch a cloud. Local Whisper model, local audio, local clipboard. Air-gapped friendly.</p>
+      </div>
+      <div class="card">
+        <h3>Near-instant</h3>
+        <p>~30× realtime on NVIDIA GPUs. Auto-detects your hardware and falls back to CPU gracefully on machines without one.</p>
+      </div>
+      <div class="card">
+        <h3>Zero config</h3>
+        <p>Click install. Veet auto-starts every time Windows boots. Tap Alt+Shift in any app and start talking. That's the whole setup.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="polish">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Polished output</span>
+      <h2>You ramble. Veet writes.</h2>
+      <p class="section-lead">Filler words are stripped automatically. What you said becomes what you meant to say.</p>
+    </div>
+    <div class="polish-grid">
+      <div class="polish-col">
+        <span class="polish-tag">Spoken</span>
+        <p class="polish-text" id="spoken-text"></p>
+      </div>
+      <div class="polish-arrow">→</div>
+      <div class="polish-col clean">
+        <span class="polish-tag tag-clean">Pasted</span>
+        <p class="polish-text" id="pasted-text"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="speed">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Speed</span>
+      <h2>Talk doesn't take time.</h2>
+      <p class="section-lead">Most people type 50 words per minute. Most people speak 200.</p>
+    </div>
+    <div class="speed-grid">
+      <div class="speed-card">
+        <div class="speed-hero">
+          <div class="speed-title">Keyboard</div>
+          <div class="speed-rate-big">50<span>WPM</span></div>
+        </div>
+        <div class="speed-mock">
+          <span id="kbd-typed"></span><span class="caret"></span>
+        </div>
+      </div>
+      <div class="speed-card veet">
+        <div class="speed-hero">
+          <div class="speed-title">Veet</div>
+          <div class="speed-rate-big">200<span>WPM</span></div>
+        </div>
+        <div class="speed-mock">
+          <span id="veet-typed"></span><span class="caret"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Pricing</span>
+      <h2>Simple. One subscription.</h2>
+    </div>
+    <div class="price-wrap">
+      <div class="price-card">
+        <div class="price-amount"><span id="price-amount">$5</span><span class="price-suffix">/month</span></div>
+        <ul class="price-list">
+          <li><span class="check">→</span> Unlimited transcription</li>
+          <li><span class="check">→</span> Reply to email 5× faster</li>
+          <li><span class="check">→</span> Document calls without typing</li>
+          <li><span class="check">→</span> Save 2+ hours every week</li>
+          <li><span class="check">→</span> All future updates included</li>
+          <li><span class="check">→</span> Cancel anytime</li>
+        </ul>
+        <a href="https://github.com/vladleonte27/veet/releases/latest/download/Veet-Setup.exe" class="btn btn-lg" download id="price-cta">
+          Get Veet
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">FAQ</span>
+      <h2>Questions, answered.</h2>
+    </div>
+    <div class="faq-list">
+      <details class="faq-item">
+        <summary>How is Veet different from cloud dictation?</summary>
+        <p>Veet runs entirely on your machine. Your audio and text never leave your computer. No cloud, no API key, no per-second billing. You own your data.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Do I need a GPU?</summary>
+        <p>No. Veet auto-detects your hardware. On NVIDIA cards it runs ~30× realtime. On any other PC it falls back to CPU mode — slower but works on every Windows 10/11 machine.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Does it work offline?</summary>
+        <p>Yes, after first install. The transcription model downloads once. After that, Veet works with no internet connection.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Which apps does it work with?</summary>
+        <p>All of them. Veet pastes into whichever app you were just using — Slack, Gmail, Notion, Word, your IDE, the address bar, anywhere you can type.</p>
+      </details>
+      <details class="faq-item">
+        <summary>When will Mac and iOS arrive?</summary>
+        <p>Mac is on the immediate roadmap. iOS is more complex (Apple restricts global hotkeys) and will follow. Hit the iOS button above to join the waitlist.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Can I cancel anytime?</summary>
+        <p>Yes — one click from your account page. No annual contracts, no prorated nonsense.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="logo">
+      <img src="assets/icon-mark.png" alt="" class="logo-mark" />
+      Veet
+    </div>
+    <div class="foot-links">
+      <a href="#features">Why</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+      <a href="mailto:hello@veet.app">Contact</a>
+    </div>
+    <div>© 2026 VL Media</div>
+  </div>
+</footer>
+
+<div class="toast" id="toast">Added to iOS waitlist — we'll email you when it's ready.</div>
+
+<script>
+  // ── Region detection ───────────────────────────────────────
+  const EU = new Set(['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE','IS','LI','NO','CH','GB']);
+  let region = '';
+  try {
+    const locale = Intl.DateTimeFormat().resolvedOptions().locale || navigator.language || 'en-US';
+    region = (locale.split('-')[1] || '').toUpperCase();
+  } catch (_) {}
+  const isEU = EU.has(region);
+  const priceText = isEU ? '€5' : '$5';
+  document.getElementById('price-amount').textContent = priceText;
+  document.getElementById('price-cta').firstChild.nodeValue = 'Get Veet for ' + priceText;
+
+  // ── iOS waitlist toast ─────────────────────────────────────
+  const toast = document.getElementById('toast');
+  document.getElementById('ios-btn').addEventListener('click', e => {
+    e.preventDefault();
+    const email = prompt("Drop your email — we'll ping you when Veet for iOS is ready.");
+    if (email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      // TODO: POST to your waitlist endpoint
+      console.log('iOS waitlist signup:', email);
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3200);
+    }
+  });
+
+  // ── Hero email typing animation ────────────────────────────
+  const TYPED = "Hi Mark, closed the Henderson deal this morning. Invoice goes out today, net 30. Let's sync Thursday to plan onboarding.";
+  const target = document.getElementById('typed');
+  let i = 0, dir = 1;
+  function tick() {
+    target.textContent = TYPED.substring(0, i);
+    if (dir > 0) {
+      if (i < TYPED.length) { i++; setTimeout(tick, 32 + Math.random() * 18); }
+      else                  { setTimeout(() => { dir = -1; tick(); }, 1800); }
+    } else {
+      if (i > 0) { i -= 3; if (i < 0) i = 0; setTimeout(tick, 14); }
+      else       { dir = 1; setTimeout(tick, 600); }
+    }
+  }
+  tick();
+
+  // ── Spoken → Pasted word-by-word ease-in ───────────────────
+  // Tokens: text + flag (filler = strikethrough red, falls out when "pasted")
+  const SPOKEN_TOKENS = [
+    {t: "Um,",      f: true},
+    {t: "hey"},
+    {t: "Mark,"},
+    {t: "uh,",      f: true},
+    {t: "we"},
+    {t: "should"},
+    {t: "basically", f: true},
+    {t: "close"},
+    {t: "the"},
+    {t: "Henderson"},
+    {t: "deal"},
+    {t: "you know",  f: true},
+    {t: "this"},
+    {t: "morning."},
+    {t: "Like,",    f: true},
+    {t: "invoice"},
+    {t: "goes"},
+    {t: "out"},
+    {t: "today,"},
+    {t: "et cetera.", f: true},
+    {t: "Let's"},
+    {t: "uh",       f: true},
+    {t: "sync"},
+    {t: "Thursday."},
+  ];
+  const PASTED = "Hey Mark, we should close the Henderson deal this morning. Invoice goes out today. Let's sync Thursday.";
+
+  function renderSpoken() {
+    const el = document.getElementById('spoken-text');
+    el.innerHTML = '';
+    SPOKEN_TOKENS.forEach((tok, i) => {
+      const tag = tok.f ? 's' : 'span';
+      const node = document.createElement(tag);
+      if (!tok.f) node.classList.add('w');
+      node.textContent = (i > 0 ? ' ' : '') + tok.t;
+      el.appendChild(node);
+      requestAnimationFrame(() => {
+        setTimeout(() => node.classList.add('in'), 130 * i);
+      });
+    });
+  }
+  function renderPasted() {
+    const el = document.getElementById('pasted-text');
+    el.innerHTML = '';
+    const words = PASTED.split(' ');
+    words.forEach((w, i) => {
+      const span = document.createElement('span');
+      span.classList.add('w');
+      span.textContent = (i > 0 ? ' ' : '') + w;
+      el.appendChild(span);
+      setTimeout(() => span.classList.add('in'), 80 * i);
+    });
+  }
+  function cyclePolish() {
+    renderSpoken();
+    const spokenDuration = SPOKEN_TOKENS.length * 130 + 600;
+    setTimeout(renderPasted, spokenDuration);
+    const totalDuration = spokenDuration + PASTED.split(' ').length * 80 + 3500;
+    setTimeout(cyclePolish, totalDuration);
+  }
+  cyclePolish();
+
+  // ── Speed comparison: 50 WPM vs 200 WPM ────────────────────
+  // Avg English word ≈ 5 chars. 50 WPM ≈ 240ms/char.  200 WPM ≈ 60ms/char.
+  const SPEED_TEXT =
+    "Hi Sarah, can you forward the contract from yesterday's call to legal " +
+    "by EOD? I'd like to lock the redlines before Friday's review. " +
+    "Also: please CC Dave on the response. Thanks!";
+  function runSpeedDemo(elId, msPerChar) {
+    const el = document.getElementById(elId);
+    let n = 0;
+    function step() {
+      el.textContent = SPEED_TEXT.substring(0, n);
+      if (n < SPEED_TEXT.length) {
+        n++;
+        setTimeout(step, msPerChar + (Math.random() - 0.5) * msPerChar * 0.3);
+      } else {
+        setTimeout(() => { n = 0; step(); }, 2400);
+      }
+    }
+    step();
+  }
+  runSpeedDemo('kbd-typed', 240);
+  runSpeedDemo('veet-typed', 60);
+</script>
+</body>
+</html>

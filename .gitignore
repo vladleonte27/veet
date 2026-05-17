@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual env (~1.5GB — never commit)
+.venv/
+
+# Build artifacts
+build/
+dist/
+
+# Vercel
+.vercel/
+
+# Logs / runtime
+*.log
+veet.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local-only downloads (we serve via GitHub Releases)
+website/downloads/
+
+# Local-only source asset (already processed into PNG/ICO)
+veet-logo.jpg
+
+# Stale helper files
+*.zip
