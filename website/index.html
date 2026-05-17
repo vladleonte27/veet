@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Veet — Voice typing, globally.</title>
 <meta name="description" content="Hold Alt+Shift. Speak. Release. Your words appear. Local Whisper, no cloud, no API key." />
-<link rel="icon" type="image/png" href="assets/icon.png" />
+<link rel="icon" type="image/png" href="assets/icon.png?v=4" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -330,13 +330,15 @@
     color: rgba(255,140,140,0.65);
     text-decoration-thickness: 1.5px;
   }
-  .polish-text .w, .polish-text s {
+  .polish-text .w, .polish-text s,
+  .speed-mock .w {
     opacity: 0;
     transform: translateY(4px);
     display: inline-block;
     transition: opacity 360ms ease-out, transform 360ms ease-out;
   }
-  .polish-text .w.in, .polish-text s.in {
+  .polish-text .w.in, .polish-text s.in,
+  .speed-mock .w.in {
     opacity: 1;
     transform: translateY(0);
   }
@@ -485,7 +487,7 @@
 <nav>
   <div class="wrap">
     <a href="#" class="logo">
-      <img src="assets/icon-mark.png" alt="Veet" class="logo-mark" />
+      <img src="assets/icon-mark.png?v=4" alt="Veet" class="logo-mark" />
       Veet
     </a>
     <div class="nav-links">
@@ -502,7 +504,7 @@
 
 <header class="hero">
   <div class="wrap">
-    <img src="assets/icon.png" alt="Veet" class="hero-mark" />
+    <img src="assets/icon.png?v=4" alt="Veet" class="hero-mark" />
     <h1>Voice typing, globally.</h1>
     <p class="lead">Hold Alt+Shift anywhere on your computer. Speak. Release. Your words appear in whatever app you were just using.</p>
     <div class="cta-row">
@@ -681,7 +683,7 @@
 <footer>
   <div class="wrap">
     <div class="logo">
-      <img src="assets/icon-mark.png" alt="" class="logo-mark" />
+      <img src="assets/icon-mark.png?v=4" alt="" class="logo-mark" />
       Veet
     </div>
     <div class="foot-links">
@@ -808,27 +810,52 @@
   cyclePolish();
 
   // ── Speed comparison: 50 WPM vs 200 WPM ────────────────────
-  // Avg English word ≈ 5 chars. 47 WPM ≈ 255ms/char.  213 WPM ≈ 56ms/char.
+  // Speed comparison.
+  // Keyboard: ~5 chars per word, 47 WPM ≈ 255ms/char (char-by-char).
+  // Veet:     213 WPM ≈ 282ms/word — slides whole words in at a time.
   const SPEED_TEXT =
     "Hi Sarah, can you forward the contract from yesterday's call to legal " +
     "by EOD? I'd like to lock the redlines before Friday's review. " +
     "Also: please CC Dave on the response. Thanks!";
-  function runSpeedDemo(elId, msPerChar) {
-    const el = document.getElementById(elId);
+
+  function runKeyboardDemo() {
+    const el = document.getElementById('kbd-typed');
     let n = 0;
     function step() {
       el.textContent = SPEED_TEXT.substring(0, n);
       if (n < SPEED_TEXT.length) {
         n++;
-        setTimeout(step, msPerChar + (Math.random() - 0.5) * msPerChar * 0.3);
+        setTimeout(step, 255 + (Math.random() - 0.5) * 80);
       } else {
         setTimeout(() => { n = 0; step(); }, 2400);
       }
     }
     step();
   }
-  runSpeedDemo('kbd-typed', 255);
-  runSpeedDemo('veet-typed', 56);
+
+  function runVeetDemo() {
+    const el = document.getElementById('veet-typed');
+    const words = SPEED_TEXT.split(' ');
+    let n = 0;
+    function step() {
+      if (n >= words.length) {
+        setTimeout(() => { el.innerHTML = ''; n = 0; step(); }, 2400);
+        return;
+      }
+      if (n > 0) el.appendChild(document.createTextNode(' '));
+      const span = document.createElement('span');
+      span.classList.add('w');
+      span.textContent = words[n];
+      el.appendChild(span);
+      requestAnimationFrame(() => span.classList.add('in'));
+      n++;
+      setTimeout(step, 282);
+    }
+    step();
+  }
+
+  runKeyboardDemo();
+  runVeetDemo();
 </script>
 </body>
 </html>
