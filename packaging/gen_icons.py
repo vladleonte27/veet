@@ -43,13 +43,12 @@ def make_icon(size: int, mark_transparent: Image.Image, glow: bool = False) -> I
     )
 
     if glow:
-        # Bottom-right anchored cyan halo, larger spread, softer falloff —
-        # reads as a light source coming from outside the icon's lower-right.
+        # Top-anchored cyan halo — reads as a light source above the icon.
         y, x = np.mgrid[0:size, 0:size].astype(np.float32)
-        gx = size * 0.74
-        gy = size * 0.74
+        gx = size * 0.50
+        gy = size * 0.26
         dist = np.sqrt((x - gx) ** 2 + (y - gy) ** 2)
-        norm = dist / (size * 0.55)                  # bigger gradient radius
+        norm = dist / (size * 0.55)
         intensity = np.clip(1.0 - norm, 0.0, 1.0) ** 1.4
         alpha_arr = (intensity * 130).astype(np.uint8)
         rgba = np.stack([
