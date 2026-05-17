@@ -31,6 +31,7 @@ hiddenimports += collect_submodules("sounddevice")
 hiddenimports += collect_submodules("keyboard")
 hiddenimports += collect_submodules("pystray")
 hiddenimports += collect_submodules("PIL")
+hiddenimports += ["licensing"]
 
 if INCLUDE_GPU:
     # GPU build: bundle CUDA libs (~1.2 GB extra).

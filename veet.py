@@ -70,13 +70,17 @@ def _cuda_path() -> None:
 _cuda_path()
 
 import ctypes
+import webbrowser
 import tkinter as tk
+import tkinter.ttk as ttk
 import numpy as np
 import sounddevice as sd
 import keyboard
 import pyperclip
 import pystray
 from PIL import Image, ImageDraw, ImageFont, ImageTk, ImageGrab, ImageFilter, ImageChops
+
+import licensing
 
 
 # ---------- config ----------
@@ -310,6 +314,9 @@ class App:
         self.model = None
         self.model_ready = threading.Event()
         self.ui_queue: queue.Queue = queue.Queue()
+        self.license_active = False
+        self.license_tier = ""
+        self.license_email: str | None = None
 
     def post_ui(self, fn) -> None:
         self.ui_queue.put(fn)
@@ -323,6 +330,9 @@ overlay: "Overlay | None" = None
 # ---------- press / release handlers ----------
 def on_press() -> None:
     if app.paused:
+        return
+    if not app.license_active:
+        app.post_ui(show_activation_modal)
         return
     if not app.model_ready.is_set():
         app.post_ui(lambda: overlay.show_loading())
@@ -866,6 +876,134 @@ def _cuda_loadable() -> bool:
         return False
 
 
+# ---------- activation modal ----------
+_activation_open = False
+
+
+def show_activation_modal() -> None:
+    """Modal asking for purchase email; validates via /api/validate."""
+    global _activation_open
+    if _activation_open:
+        return
+    _activation_open = True
+
+    win = tk.Toplevel(root)
+    win.title("Activate Veet")
+    win.configure(bg="#0F1115")
+    win.resizable(False, False)
+    win.attributes("-topmost", True)
+
+    w, h = 420, 320
+    sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+    win.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
+
+    frame = tk.Frame(win, bg="#0F1115", padx=32, pady=28)
+    frame.pack(fill="both", expand=True)
+
+    tk.Label(frame, text="Activate Veet", bg="#0F1115", fg="#F5F5F8",
+             font=("Segoe UI", 20, "bold")).pack(anchor="w")
+    tk.Label(frame, text="Enter the email you used at checkout.",
+             bg="#0F1115", fg="#9AA0A6",
+             font=("Segoe UI", 10)).pack(anchor="w", pady=(2, 18))
+
+    email_var = tk.StringVar(value=licensing.cached_email() or "")
+    entry = tk.Entry(frame, textvariable=email_var, font=("Segoe UI", 11),
+                     bg="#1A1D26", fg="#F5F5F8", insertbackground="#67E8F9",
+                     relief="flat", bd=0)
+    entry.pack(fill="x", ipady=10, ipadx=12)
+    entry.focus_set()
+
+    status_var = tk.StringVar(value="")
+    status_label = tk.Label(frame, textvariable=status_var, bg="#0F1115",
+                            fg="#9AA0A6", font=("Segoe UI", 10),
+                            anchor="w", justify="left", wraplength=360)
+    status_label.pack(anchor="w", pady=(10, 0))
+
+    def _close():
+        global _activation_open
+        _activation_open = False
+        try:
+            win.destroy()
+        except Exception:
+            pass
+
+    btn_row = tk.Frame(frame, bg="#0F1115")
+    btn_row.pack(fill="x", pady=(22, 0))
+
+    btn_activate = tk.Button(
+        btn_row, text="Activate",
+        bg="#67E8F9", fg="#0A0D12", activebackground="#A5F3FC",
+        relief="flat", bd=0, padx=22, pady=10,
+        font=("Segoe UI", 11, "bold"), cursor="hand2",
+    )
+
+    def do_activate():
+        status_var.set("Checking…")
+        status_label.config(fg="#9AA0A6")
+        btn_activate.config(state="disabled")
+        win.update_idletasks()
+
+        def _worker():
+            res = licensing.activate(email_var.get())
+            app.post_ui(lambda: _done(res))
+
+        def _done(res):
+            btn_activate.config(state="normal")
+            if res.get("active"):
+                app.license_active = True
+                app.license_tier = res.get("tier", "")
+                app.license_email = res.get("email")
+                log(f"license active ({app.license_tier})")
+                _close()
+            else:
+                reason = res.get("reason", "unknown")
+                msg = {
+                    "no_customer": "We couldn't find a purchase for that email. Check the spelling, or buy Veet first.",
+                    "no_active_plan": "That account has no active subscription. Resubscribe at veet.space.",
+                    "offline": "Couldn't reach the license server. Check your internet connection.",
+                    "bad_email": "That doesn't look like a valid email.",
+                    "server_misconfigured": "License server is temporarily unavailable. Try again in a few minutes.",
+                }.get(reason, f"Activation failed ({reason}).")
+                status_var.set(msg)
+                status_label.config(fg="#ff8080")
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    btn_activate.config(command=do_activate)
+    btn_activate.pack(side="right")
+    entry.bind("<Return>", lambda _: do_activate())
+
+    btn_buy = tk.Button(
+        btn_row, text="Buy Veet",
+        command=lambda: webbrowser.open("https://veet.space/#pricing"),
+        bg="#1A1D26", fg="#F5F5F8", activebackground="#252938",
+        relief="flat", bd=0, padx=18, pady=10,
+        font=("Segoe UI", 11), cursor="hand2",
+    )
+    btn_buy.pack(side="right", padx=(0, 10))
+
+    tk.Label(frame,
+             text="No license? Buy at veet.space and we'll send a confirmation\n"
+                  "email — use that same email here to activate.",
+             bg="#0F1115", fg="#6E7480",
+             font=("Segoe UI", 9), justify="left").pack(anchor="w", pady=(18, 0))
+
+    win.protocol("WM_DELETE_WINDOW", _close)
+
+
+def license_check_thread() -> None:
+    """Background license check on startup."""
+    res = licensing.status()
+    app.license_active = bool(res.get("active"))
+    app.license_tier = res.get("tier", "")
+    app.license_email = res.get("email")
+    log(f"license: active={app.license_active} tier={app.license_tier or '-'} "
+        f"reason={res.get('reason', '-')}")
+    if not app.license_active:
+        app.post_ui(show_activation_modal)
+
+
+# ---------- boot ----------
 def load_model_thread() -> None:
     from faster_whisper import WhisperModel  # lazy: keeps main-thread import fast
     device = DEVICE
@@ -900,6 +1038,7 @@ def main() -> None:
     overlay = Overlay(root)
 
     threading.Thread(target=load_model_thread, daemon=True).start()
+    threading.Thread(target=license_check_thread, daemon=True).start()
     HotkeyHook()
     tray = build_tray()
     threading.Thread(target=tray.run, daemon=True).start()
