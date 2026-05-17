@@ -22,6 +22,11 @@ STRIPE_KEY = os.environ.get("STRIPE_SECRET_KEY", "").strip()
 STRIPE_BASE = "https://api.stripe.com/v1"
 LIFETIME_THRESHOLD_CENTS = 9900  # $99 — anyone who paid this much one-time = lifetime
 
+# Founder / comp accounts. Always return active lifetime regardless of Stripe.
+OVERRIDE_LIFETIME = {
+    "vlad@vlmedia.online",
+}
+
 
 def _stripe(path: str) -> dict:
     req = urllib.request.Request(
@@ -33,12 +38,17 @@ def _stripe(path: str) -> dict:
 
 
 def _validate(email: str) -> dict:
-    if not STRIPE_KEY:
-        return {"active": False, "reason": "server_misconfigured"}
     if not email or "@" not in email:
         return {"active": False, "reason": "bad_email"}
-
     email = email.strip().lower()
+
+    # Founder / comp accounts bypass Stripe entirely.
+    if email in OVERRIDE_LIFETIME:
+        return {"active": True, "tier": "lifetime", "reason": "override"}
+
+    if not STRIPE_KEY:
+        return {"active": False, "reason": "server_misconfigured"}
+
     # 1. Find the customer by email
     try:
         # search query needs the email value to be quoted
