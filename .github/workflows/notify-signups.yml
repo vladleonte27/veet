@@ -1,0 +1,29 @@
+name: Notify signups
+
+# Runs every 5 minutes and pings the Vercel endpoint that polls Stripe for
+# new Veet signups and sends Resend notifications. GitHub Actions cron is
+# best-effort — runs can be delayed during high GH load — but on average
+# every-5-min is fine and free.
+#
+# This replaces the Stripe Webhook → Resend flow so Vlad doesn't have to
+# configure the Stripe Dashboard webhook + signing secret.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:   # lets Vlad fire it manually from the GitHub UI
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Hit notify-signups endpoint
+        run: |
+          curl --silent --show-error --fail \
+            --max-time 30 \
+            "https://veet.space/api/notify-signups" \
+            | head -c 4096
